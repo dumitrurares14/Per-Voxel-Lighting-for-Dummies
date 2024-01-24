@@ -3,12 +3,12 @@
 <img src = "assets/images/preview.png">
 # Introduction
 
-This article covers the fundamentals of building and rendering a 3D grid of voxels with per voxel lighting effects. Expect this to be beginner friendly with a decent but not perfect next gen output at the end. I will cover the principles behind this "per voxel" idea, while also mentioning areas of improvement if you are interested in doing extra reserach on other features or implementations for better results. This should be easy to follow along regardless of what graphics API you choose, for my examples I will showcase OpenCL, since this is what I used for this project, but you can feel free to follow along with something else. 
+This article covers the fundamentals of building and rendering a 3D grid of voxels with per-voxel lighting effects. Expect this to be beginner-friendly with a decent but not perfect next-gen output at the end. I will cover the principles behind this "per voxel" idea, while also mentioning areas of improvement if you are interested in doing extra research on other features or implementations for better results. This should be easy to follow along regardless of what graphics API you choose, for my examples I will showcase OpenCL since this is what I used for this project, but you can feel free to follow along with something else. 
 
 # Storing the voxels
 ## But what is a voxel? 
 Voxels are our cubes in the scene and we can think about them like 3D pixels.
-We can declare voxels simply by using two float4 or float3 (let's go with the first option because it might help with memory aligment later and extra storage variables might come in handy). We don't really need a position for a voxel since we are going to use a grid, but we surely need a way to express how that voxel looks. The first float is for the base color, and the second one will hold the lighting color. I will also use the 4th member of the first float4 to store the status of that voxel. One representing a solid voxel and zero an empty space.
+We can declare voxels simply by using two float4 or float3 (let's go with the first option because it might help with memory alignment later and extra storage variables might come in handy). We don't really need a position for a voxel since we are going to use a grid, but we surely need a way to express how that voxel looks. The first float is for the base color, and the second one will hold the lighting color. I will also use the 4th member of the first float4 to store the status of that voxel. One represents a solid voxel and zero is an empty space.
 ```cpp
 typedef struct {
   float4 color;//base color
@@ -16,7 +16,7 @@ typedef struct {
 } Voxel;
 ```
 
-Not having a position for each voxel might sound odd, but we can use this very basic formula to acces each voxel by determining an index using our iterators while looping trough the grid.
+Not having a position for each voxel might sound odd, but we can use this very basic formula to access each voxel by determining an index using our iterators while looping through the grid.
 ```cpp
 int x, y, z; 
 int GRID_SIZE = 64;
@@ -26,7 +26,7 @@ int index = x + y * GRID_SIZE + z * GRID_SIZE * GRID_SIZE;
 
 Before rendering and playing with cool light effects we need a way to store our voxels. Let's aim for a fixed 64x64x64 grid. For what we aim at the end, this offers enough space for some decent test scenes and will not impact performance that much.
 
-The easiest way to store this, is a simple C style array of voxels. There are other methods out there, that are more complicated and have more performance but this is enough for now.
+The easiest way to store this is a simple C-Style array of voxels. There are other methods out there, that are more complicated and have more performance but this is enough for now.
 ```cpp
 Voxel grid[GRID_SIZE * GRID_SIZE * GRID_SIZE]
 ```
@@ -36,9 +36,9 @@ Voxel grid[GRID_SIZE * GRID_SIZE * GRID_SIZE]
 ## Plotting pixels
 We will make good use of something that has become really popular in the last couple of years: RAY-TRACING, ray marching to be more precise. 
 
-The basic idea is to have some code execute for each pixel so we can draw something. Ray marching comes into play so we can determine if that pixel is supposed to represent a part of one of our voxels or not.
+The basic idea is to have some code executed for each pixel so we can draw something. Ray marching comes into play so we can determine if that pixel is supposed to represent a part of one of our voxels or not.
 
-Now let's take a step back and understand what is ray tracing, ray marching and how we can use this here to get nice performance and results. Both ray marching and ray tracing are ways to determine an intersection between a ray and something we define (usually by some mathematical formuals). The difference between the two is how the ray is being shot in the scene. Ray tracing is straight to the point(and traced back to simulate light propagation), yields nicer looking results but is slower. Ray marching will gradually step into the scene step by step until it hits something (we can trace this one back too).
+Now let's take a step back and understand what is ray tracing, ray marching and how we can use this here to get nice performance and results. Both ray marching and ray tracing are ways to determine an intersection between a ray and something we define (usually by some mathematical formulas). The difference between the two is how the ray is being shot in the scene. Ray tracing is straight to the point(and traced back to simulate light propagation), and yields nicer-looking results but is slower. Ray marching will gradually step into the scene step by step until it hits something (we can trace this one back too).
 We care more about performance and simplicity in this project so ray marching will be the way to go. This being said, we want to have rays for each pixel on the screen, marching forward to see what we hit so we color each pixel accordingly.
 
 We can define a ray like this:
@@ -69,14 +69,14 @@ ray.direction = (float3)(normalizedX, normalizedY, 1.0f);
 
 
 ##  Fast Voxel Traversal Algorithm 
-We are going to use the Fast Voxel Traversal Algorithm for our ray marching technique. Being fast and reliable, this algorithm is specifically designed for traversing grids and it will represent the sweet spot of our project. You may find people refering to it as DDA (Digital Differential Analyzer) algorithm.
+We are going to use the Fast Voxel Traversal Algorithm for our ray marching technique. Being fast and reliable, this algorithm is specifically designed for traversing grids and it will represent the sweet spot of our project. You may find people referring to it as DDA (Digital Differential Analyzer) algorithm.
 
 #### How does the basic principle of DDA works?
 
 We evaluate how much the ray travels on each axis inside the voxel and we determine which voxel comes next based on the shortest axis traversed and the direction of it. This is important so we don't skip by mistake cells. We march using this method while checking at each step if the current voxel is empty or not. (voxel.color.w as we decided earlier).
 <a href="https://www.youtube.com/watch?v=NbSee-XM7WA&t=412s">Check this tutorial for DDA with a great visual example</a>
 
-You can find a more in depth explanation on this <a href = "https://github.com/cgyurgyik/fast-voxel-traversal-algorithm/blob/master/overview/FastVoxelTraversalOverview.md">here</a>. This is a brief outline of the algorithm:
+You can find a more in-depth explanation on this <a href = "https://github.com/cgyurgyik/fast-voxel-traversal-algorithm/blob/master/overview/FastVoxelTraversalOverview.md">here</a>. This is a brief outline of the algorithm:
 ```cpp
 //initialization for the first step
 for (int i = 0; i < 3; ++i) 
@@ -150,14 +150,14 @@ If you followed everything so far you could have something like this.
 
 <img src = "assets/images/1.png">
 
-This is already quite impressive but I know we are all here for the cool per voxel effects so let's dive in this topic now.
+This is already quite impressive but I know we are all here for the cool per-voxel effects so let's dive into this topic now.
 
 # Per Voxel instead of Per pixel
-The main difference between the two aprroaches is performance and looks in the end. 
-For doing lighting per pixel we would follow the regular ray tracing principles and use the kernel/shader we already made in the previous step, since this is already capable of computing code for each pixel on the screen. 
-However, we want the nice stylized and blocky effect instead. We can achieve this by having a separate kernel or shader depending on what API you are using that will run some code for each voxel in the scene instead of each pixel on the screen. This is basically a better version of a for loop that will run on our GPUs.
+The main difference between the two approaches is performance and looks in the end. 
+For doing lighting per pixel we would follow the regular ray tracing principles and use the kernel/shader we already made in the previous step since this is already capable of computing code for each pixel on the screen. 
+However, we want a nice stylized and blocky effect instead. We can achieve this by having a separate kernel or shader depending on what API you are using that will run some code for each voxel in the scene instead of each pixel on the screen. This is basically a better version of a for loop that will run on our GPUs.
 
-Here is an example on how to acces the voxels with this approach. This is in OpenCL kernel but it will be similar in others envirnoments.
+Here is an example of how to access the voxels with this approach. This is in OpenCL kernel code but it will be similar in other environments.
 
 ```cpp
 int x = get_global_id(0);
@@ -170,9 +170,9 @@ int index = x + y * GRID_SIZE + z * GRID_SIZE * GRID_SIZE;
 grid[index]//read or modify its values
 ```
 
-Just to put into perspective, let's say we need to calculate some lighting in our scene. For the sake of this example let's assume that the calculation for this lighting is exactly the same in a per pixel method as well as on a per voxel method. Now let's think about how many of those calculation we would do in each scenario. 
+Just to put it into perspective, let's say we need to calculate some lighting in our scene. For the sake of this example let's assume that the calculation for this lighting is exactly the same in a per-pixel method as well as on a per-voxel method. Now let's think about how many of those calculations we would do in each scenario. 
 
-Usually the most common resolution for a monitor is Full HD (1920x1080), this results in 2.073.600 pixels, thus that many calculations. Our scene, as we established in the begining, is 64x64x64 voxels, which means we only do 262.144 calculations (worst case scenario where the entire grid is filled)
+Usually, the most common resolution for a monitor is Full HD (1920x1080), which results in 2.073.600 pixels, thus that many calculations. Our scene, as we established in the beginning, is 64x64x64 voxels, which means we only do 262.144 calculations (a worst-case scenario where the entire grid is filled)
 And we get the stylized effect that we all love on top of all that performance.
 
 # Lighting
@@ -238,7 +238,7 @@ if (hit == -10) {
 
 ```
 
-We can multiply this shadow result to our light calculation we had before for the final result
+We can multiply our light calculations we had before by this shadow multiplier for the final result.
 ```cpp
 grid[index].extra.xyz = lightCol * attenuation * intensity * shadowMultiplier;
 ```
@@ -246,11 +246,11 @@ grid[index].extra.xyz = lightCol * attenuation * intensity * shadowMultiplier;
 
 # Improvements?
 
-The list of improvements could go on forever but for the sake of this article I will keep it short and  quickly describe how to implement only some of the easy ones out there.
+The list of improvements could go on forever but for the sake of this article, I will keep it short and quickly describe how to implement only some of the easy ones out there.
 
 ## Soft Shadows at a per voxel level?
 <img src = "assets/images/hard_soft_zoom.png">
-If we calculate our shadows with a single fixed cell position for our light source we only get hard shadows. To quickly solve this issue we could pick each time a random adjasent voxel around the light source itself(imagine a 3x3x3 area where we pick a cell). This way we get the effect of penumbra since our light is no longer a single point. However, we now notice our voxels flickering and thats because of the random position picked each frame, thus random results each frame; we call this noise. 
+If we calculate our shadows with a single fixed cell position for our light source we only get hard shadows. To quickly solve this issue we could pick each time a random adjacent voxel around the light source itself(imagine a 3x3x3 area where we pick a cell). This way we get the effect of penumbra since our light is no longer a single point. However, we now notice our voxels flickering, and that's because of the random position picked each frame, thus random results each frame; we call this noise. 
 
 ```cpp
 float3 lightCell = floor(lights[i].pos.xyz);
@@ -261,9 +261,9 @@ We could also shoot 27 rays (3x3x3) each time for a light and eliminate the nois
 
 ## Denoising per voxel?
 
-Like regular ray tracing, noise it's an annoying issue; fortunelty there are solutions quite easy to implement. Here are two ideas that you could try,separately or even combine them.
+Like regular ray tracing, noise it's an annoying issue; fortunately, there are solutions quite easy to implement. Here are two ideas that you could try, separately or even combine them.
 
-- Instead of using the current frame result for our light calulcations, we can do a weighted average between the current frame result and the last frame, where the last one is more important. This will also give us some latency in our image but we can play around with that weighted average and find a good balance between looks and latency.
+- Instead of using the current frame result for our light calculations, we can do a weighted average between the current frame result and the last frame, where the last one is more important. This will also give us some latency in our image but we can play around with that weighted average and find a good balance between looks and latency.
 
 ```cpp
 ////....light calculations....
@@ -276,7 +276,7 @@ float3 result = (0.1f * c + 0.9f * oldColor);
 grid[index].extra.xyz = result; // final output
 ```
 
-- We can also have a structure that will acumulate all of the light calculation for each voxel (this can be another grid). Each frame we will add the result to the acumulator grid. The image we display is formed by the acumulation color divided by how many frames we have acumulated. Keep in mind that we need to reset the frame counter when we move something in the world otherwise it will take a long time to see the change on the screen.
+- We can also have a structure that will accumulate all of the light calculations for each voxel (this can be another grid). For each frame, we will add the result to the accumulator grid. The image we display is formed by the accumulation color divided by how many frames we have accumulated. Keep in mind that we need to reset the frame counter when we move something in the world otherwise, it will take a long time to see the change on the screen.
 
 ```cpp
 ////....light calculations....
@@ -289,13 +289,16 @@ grid[index].extra.xyz = acumulatorGrid[index].extra.xyz / (float)frameIndex; // 
 # Closing remarks
 
 <img src="assets/images/fin.png">
-This article showcased the amazing posibilities with voxels and really simple algorithms and ideas. We laid the foundation for a possible interesting future project and from now on, the sky is the limit, reflections, global ilumiantions, you name it!
+This article showcased the amazing possibilities with voxels and really simple algorithms and ideas. We laid the foundation for a possible interesting future project and from now on, the sky is the limit, reflections, global illumination, you name it!
 
 If you followed this article or at least found it interesting, I strongly encourage you to take a look at the following:
-- https://jacco.ompf2.com/2021/02/01/a-voxel-renderer-for-learning-c-c/ 
-- Octress and voxel engines
-- Ray tracing
-- Teardown devtalk
+- <a href = "https://jacco.ompf2.com/2021/02/01/a-voxel-renderer-for-learning-c-c/ ">A voxel renderer for learning C/C++</a>
+- <a href = "https://www.researchgate.net/publication/2611491_A_Fast_Voxel_Traversal_Algorithm_for_Ray_Tracing">Grid traversal algorithm research paper</a>
+- <a href = "https://en.wikipedia.org/wiki/Octree">Octress and voxel engines</a>
+- <a href = "https://raytracing.github.io/">Ray tracing</a>
+- <a href = "https://lodev.org/cgtutor/raycasting.html">Ray casting</a>
+- <a href = "https://www.youtube.com/watch?v=tZP7vQKqrl8">Teardown devtalk</a>
+
 
 
 
