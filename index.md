@@ -71,9 +71,9 @@ ray.direction = (float3)(normalizedX, normalizedY, 1.0f);
 ##  Fast Voxel Traversal Algorithm 
 We are going to use the Fast Voxel Traversal Algorithm for our ray marching technique. Being fast and reliable, this algorithm is specifically designed for traversing grids and it will represent the sweet spot of our project. You may find people referring to it as DDA (Digital Differential Analyzer) algorithm.
 
-#### How does the basic principle of DDA works?
+#### How does the basic principle of DDA work?
 
-We evaluate how much the ray travels on each axis inside the voxel and we determine which voxel comes next based on the shortest axis traversed and the direction of it. This is important so we don't skip by mistake cells. We march using this method while checking at each step if the current voxel is empty or not. (voxel.color.w as we decided earlier).
+We evaluate how much the ray travels on each axis inside the voxel and we determine which voxel comes next based on the shortest axis traversed and the direction of it. This is important so we don't skip cells by mistake. We march using this method while checking at each step if the current voxel is empty or not. (voxel.color.w as we decided earlier).
 <a href="https://www.youtube.com/watch?v=NbSee-XM7WA&t=412s">Check this tutorial for DDA with a great visual example</a>
 
 You can find a more in-depth explanation on this <a href = "https://github.com/cgyurgyik/fast-voxel-traversal-algorithm/blob/master/overview/FastVoxelTraversalOverview.md">here</a>. This is a brief outline of the algorithm:
