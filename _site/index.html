@@ -230,7 +230,7 @@ And we get the stylized effect that we all love on top of all that performance.<
 <span class="p">}</span><span class="n">Light</span><span class="p">;</span>
 </code></pre></div></div>
 <p>Same memory talk as the voxels and I am going to use the 4th member of color to store the light intensity.
-We can evaluate the light level based on the distance between the voxel and the light source. Add some attenuation and intensity and we have some light evaluated that we can store in that extra float4.</p>
+We can evaluate the light level based on the distance between the voxel and the light source. Add some attenuation and intensity and we have some light evaluated that we can store in that extra float4 in our voxel.</p>
 
 <div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">float3</span> <span class="n">lightCell</span> <span class="o">=</span> <span class="n">floor</span><span class="p">(</span><span class="n">lights</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">pos</span><span class="p">.</span><span class="n">xyz</span><span class="p">);</span>
 
@@ -304,7 +304,7 @@ If we calculate our shadows with a single fixed cell position for our light sour
 <p>Like regular ray tracing, noise it’s an annoying issue; fortunelty there are solutions quite easy to implement. Here are two ideas that you could try,separately or even combine them.</p>
 
 <ul>
-  <li>Instead of using the current frame result for our light calulcations, we can do a weighted average between the current frame result and the last frame, where the last one is more important. This will also give us some latency in our image but we can find a good balance for that weighted average and find a good balance between looks and latency.</li>
+  <li>Instead of using the current frame result for our light calulcations, we can do a weighted average between the current frame result and the last frame, where the last one is more important. This will also give us some latency in our image but we can play around with that weighted average and find a good balance between looks and latency.</li>
 </ul>
 
 <div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">////....light calculations....</span>

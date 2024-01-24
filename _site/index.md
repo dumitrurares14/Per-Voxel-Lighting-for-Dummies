@@ -185,7 +185,7 @@ typedef struct
 }Light;
 ```
 Same memory talk as the voxels and I am going to use the 4th member of color to store the light intensity.
-We can evaluate the light level based on the distance between the voxel and the light source. Add some attenuation and intensity and we have some light evaluated that we can store in that extra float4.
+We can evaluate the light level based on the distance between the voxel and the light source. Add some attenuation and intensity and we have some light evaluated that we can store in that extra float4 in our voxel.
 
 ```cpp
 float3 lightCell = floor(lights[i].pos.xyz);
@@ -263,7 +263,7 @@ We could also shoot 27 rays (3x3x3) each time for a light and eliminate the nois
 
 Like regular ray tracing, noise it's an annoying issue; fortunelty there are solutions quite easy to implement. Here are two ideas that you could try,separately or even combine them.
 
-- Instead of using the current frame result for our light calulcations, we can do a weighted average between the current frame result and the last frame, where the last one is more important. This will also give us some latency in our image but we can find a good balance for that weighted average and find a good balance between looks and latency.
+- Instead of using the current frame result for our light calulcations, we can do a weighted average between the current frame result and the last frame, where the last one is more important. This will also give us some latency in our image but we can play around with that weighted average and find a good balance between looks and latency.
 
 ```cpp
 ////....light calculations....
