@@ -4,16 +4,16 @@
     <meta charset='utf-8'>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <link rel="stylesheet" href="/assets/css/style.css?v=e6079752ce6054a8cab248947466ab590135a564">
+    <link rel="stylesheet" href="/assets/css/style.css?v=32800d9ca037d79f5bfa6d564c58cb4d7745aba8">
     <link rel="stylesheet" type="text/css" href="/assets/css/print.css" media="print">
     <!--[if lt IE 9]>
     <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
     <![endif]-->
 
 <!-- Begin Jekyll SEO tag v2.8.0 -->
-<title>Introduction | Per Voxel Lighting for Dummies</title>
+<title>Per Voxel Lighting for Dummies | By Dumitru Rareş</title>
 <meta name="generator" content="Jekyll v3.9.3" />
-<meta property="og:title" content="Introduction" />
+<meta property="og:title" content="Per Voxel Lighting for Dummies" />
 <meta property="og:locale" content="en_US" />
 <meta name="description" content="By Dumitru Rareş" />
 <meta property="og:description" content="By Dumitru Rareş" />
@@ -22,9 +22,9 @@
 <meta property="og:site_name" content="Per Voxel Lighting for Dummies" />
 <meta property="og:type" content="website" />
 <meta name="twitter:card" content="summary" />
-<meta property="twitter:title" content="Introduction" />
+<meta property="twitter:title" content="Per Voxel Lighting for Dummies" />
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"WebSite","description":"By Dumitru Rareş","headline":"Introduction","name":"Per Voxel Lighting for Dummies","url":"http://localhost:4000/"}</script>
+{"@context":"https://schema.org","@type":"WebSite","description":"By Dumitru Rareş","headline":"Per Voxel Lighting for Dummies","name":"Per Voxel Lighting for Dummies","url":"http://localhost:4000/"}</script>
 <!-- End Jekyll SEO tag -->
 
     <!-- start custom head snippets, customize with your own _includes/head-custom.html file -->
@@ -45,7 +45,7 @@
       <div class="inner">
 
         <header>
-          <h1>Introduction</h1>
+          <h1>Per Voxel Lighting for Dummies</h1>
           <h2>By Dumitru Rareş</h2>
         </header>
         <section id="downloads" class="clearfix">
@@ -54,80 +54,125 @@
         </section>
         <hr>
         <section id="main_content">
-          <h1 id="introduction">Introduction</h1>
+          <p><br /></p>
+
+<p><img src="assets/images/preview.png" /></p>
+<h1 id="introduction">Introduction</h1>
 
 <p>This article covers the fundamentals of building and rendering a 3D grid of voxels with per voxel lighting effects. Expect this to be beginner friendly with a decent but not perfect next gen output at the end. I will cover the principles behind this “per voxel” idea, while also mentioning areas of improvement if you are interested in doing extra reserach on other features or implementations for better results. This should be easy to follow along regardless of what graphics API you choose, for my examples I will showcase OpenCL, since this is what I used for this project, but you can feel free to follow along with something else.</p>
 
 <h1 id="storing-the-voxels">Storing the voxels</h1>
 <h2 id="but-what-is-a-voxel">But what is a voxel?</h2>
-<p>We can declare voxels simply by using two float4 or float3 (let’s go with the first option because it might help with memory aligment later). We don’t really need a position for a voxel since we are going to use a grid, but we surely need a way to express how that voxel looks. The first float is for the base color, and the second one will hold the lighting color.</p>
-<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="nc">Voxel</span><span class="p">{</span>
-    <span class="n">float4</span> <span class="n">color</span><span class="p">;</span><span class="c1">//base color</span>
-    <span class="n">float4</span> <span class="n">extra</span><span class="p">;</span><span class="c1">//used for color evaluation</span>
-<span class="p">}</span>
+<p>Voxels are our cubes in the scene and we can think about them like 3D pixels.
+We can declare voxels simply by using two float4 or float3 (let’s go with the first option because it might help with memory aligment later and extra storage variables might come in handy). We don’t really need a position for a voxel since we are going to use a grid, but we surely need a way to express how that voxel looks. The first float is for the base color, and the second one will hold the lighting color. I will also use the 4th member of the first float4 to store the status of that voxel. One representing a solid voxel and zero an empty space.</p>
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">typedef</span> <span class="k">struct</span> <span class="p">{</span>
+  <span class="n">float4</span> <span class="n">color</span><span class="p">;</span><span class="c1">//base color</span>
+  <span class="n">float4</span> <span class="n">extra</span><span class="p">;</span><span class="c1">//used for color evaluation</span>
+<span class="p">}</span> <span class="n">Voxel</span><span class="p">;</span>
 </code></pre></div></div>
 
-<p>Not having a position for each voxel might sound odd, but we can use this very basic formula to determine the index based on x,y,z positions on the grid when looping trough the grid.</p>
+<p>Not having a position for each voxel might sound odd, but we can use this very basic formula to acces each voxel by determining an index using our iterators while looping trough the grid.</p>
 <div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">;</span> 
 <span class="kt">int</span> <span class="n">GRID_SIZE</span> <span class="o">=</span> <span class="mi">64</span><span class="p">;</span>
 
 <span class="kt">int</span> <span class="n">index</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">GRID_SIZE</span> <span class="o">+</span> <span class="n">z</span> <span class="o">*</span> <span class="n">GRID_SIZE</span> <span class="o">*</span> <span class="n">GRID_SIZE</span><span class="p">;</span>
 </code></pre></div></div>
 
-<p>Before playing with cool light effects we need a way to store our voxels. Let’s aim for a fixed 64x64x64 grid. For what we aim at the end this, offers enough space for some decent test scenes and will not impact performance that much.</p>
+<p>Before rendering and playing with cool light effects we need a way to store our voxels. Let’s aim for a fixed 64x64x64 grid. For what we aim at the end, this offers enough space for some decent test scenes and will not impact performance that much.</p>
 
-<p>The easiest way to store this is a simple C style array of voxels.</p>
-<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">Voxel</span> <span class="n">grid</span><span class="p">[</span><span class="n">GRID_SIZE</span> <span class="o">*</span> <span class="n">GRID_SIZE</span> <span class="o">*</span> <span class="n">GRID_SIZE</span><span class="p">]</span><span class="n">l</span>
+<p>The easiest way to store this, is a simple C style array of voxels. There are other methods out there, that are more complicated and have more performance but this is enough for now.</p>
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">Voxel</span> <span class="n">grid</span><span class="p">[</span><span class="n">GRID_SIZE</span> <span class="o">*</span> <span class="n">GRID_SIZE</span> <span class="o">*</span> <span class="n">GRID_SIZE</span><span class="p">]</span>
 </code></pre></div></div>
 
 <h1 id="rendering-voxels">Rendering voxels</h1>
 <h2 id="plotting-pixels">Plotting pixels</h2>
-<p>We will make good use of something that has become really popular in the last couple of years RAY-TRACING;ray marching to be more precise.</p>
+<p>We will make good use of something that has become really popular in the last couple of years: RAY-TRACING, ray marching to be more precise.</p>
 
 <p>The basic idea is to have some code execute for each pixel so we can draw something. Ray marching comes into play so we can determine if that pixel is supposed to represent a part of one of our voxels or not.</p>
 
-<p>Now let’s take a step back and understand what is ray tracing, ray marching and how we can use this here to get nice performance and results. Both ray marching and ray tracing are ways to determine an intersection between a ray and something we define(usually by some mathematical formuals). The difference between the two is how the ray is being shot in the scene. Ray tracing is straight to the point, yields nicer looking results but is slower. Ray marching will gradually step into the scene step by step until it hits something. 
-This being said, we want to have rays for each pixel on the screen, marching forward to see what we hit so we color each pixel accordingly.</p>
+<p>Now let’s take a step back and understand what is ray tracing, ray marching and how we can use this here to get nice performance and results. Both ray marching and ray tracing are ways to determine an intersection between a ray and something we define (usually by some mathematical formuals). The difference between the two is how the ray is being shot in the scene. Ray tracing is straight to the point(and traced back to simulate light propagation), yields nicer looking results but is slower. Ray marching will gradually step into the scene step by step until it hits something (we can trace this one back too).
+We care more about performance and simplicity in this project so ray marching will be the way to go. This being said, we want to have rays for each pixel on the screen, marching forward to see what we hit so we color each pixel accordingly.</p>
 
-<h2 id="dda-algorithm">DDA Algorithm</h2>
-<p>We are going to use DDA, also know as the Fast Grid traversal algorithm for our ray marching technique. This is a really fast and precise way to march inside a grid.</p>
-
-<p>How the basic principle of DDA works?
-We evaluate how much the ray travles on each axis inside the voxel and we determine which voxel comes next based on the shortest axis traversed and the direction of it.
-<a href="https://www.youtube.com/watch?v=NbSee-XM7WA&amp;t=412s">This tutorial for DDA with a great visual example</a></p>
-
-<p>The main core of the algorithm in code:</p>
-<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="p">(</span><span class="n">tMax</span><span class="p">.</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">tMax</span><span class="p">.</span><span class="n">y</span> <span class="o">&amp;&amp;</span> <span class="n">tMax</span><span class="p">.</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">tMax</span><span class="p">.</span><span class="n">z</span><span class="p">)</span> 
-<span class="p">{</span>
-    <span class="n">currentCell</span><span class="p">.</span><span class="n">x</span> <span class="o">+=</span> <span class="n">step</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
-    <span class="n">tMax</span><span class="p">.</span><span class="n">x</span> <span class="o">+=</span> <span class="n">tDelta</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
-    <span class="c1">//maybe pic a normal too?</span>
-    <span class="c1">//normal = (float3)(-step.x, 0.0f, 0.0f);</span>
-<span class="p">}</span> <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="n">tMax</span><span class="p">.</span><span class="n">y</span> <span class="o">&lt;</span> <span class="n">tMax</span><span class="p">.</span><span class="n">z</span><span class="p">)</span> <span class="p">{</span>
-    <span class="n">currentCell</span><span class="p">.</span><span class="n">y</span> <span class="o">+=</span> <span class="n">step</span><span class="p">.</span><span class="n">y</span><span class="p">;</span>
-    <span class="n">tMax</span><span class="p">.</span><span class="n">y</span> <span class="o">+=</span> <span class="n">tDelta</span><span class="p">.</span><span class="n">y</span><span class="p">;</span>
-<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-    <span class="n">currentCell</span><span class="p">.</span><span class="n">z</span> <span class="o">+=</span> <span class="n">step</span><span class="p">.</span><span class="n">z</span><span class="p">;</span>
-    <span class="n">tMax</span><span class="p">.</span><span class="n">z</span> <span class="o">+=</span> <span class="n">tDelta</span><span class="p">.</span><span class="n">z</span><span class="p">;</span>
-<span class="p">}</span>
-
-<span class="c1">//What if we hit something?</span>
-<span class="c1">//we check if the grid holds something in there or not, if there is a solid voxel and not air, we can say that we hit something</span>
-<span class="k">if</span> <span class="p">(</span><span class="n">currentCell</span><span class="p">.</span><span class="n">x</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">currentCell</span><span class="p">.</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">GRID_SIZE</span> <span class="o">&amp;&amp;</span>
-        <span class="n">currentCell</span><span class="p">.</span><span class="n">y</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">currentCell</span><span class="p">.</span><span class="n">y</span> <span class="o">&lt;</span> <span class="n">GRID_SIZE</span> <span class="o">&amp;&amp;</span>
-        <span class="n">currentCell</span><span class="p">.</span><span class="n">z</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">currentCell</span><span class="p">.</span><span class="n">z</span> <span class="o">&lt;</span> <span class="n">GRID_SIZE</span><span class="p">)</span> <span class="p">{</span>
-        
-        <span class="kt">int</span> <span class="n">indexGrid</span> <span class="o">=</span> <span class="n">currentCell</span><span class="p">.</span><span class="n">z</span> <span class="o">*</span> <span class="n">GRID_SIZE</span> <span class="o">*</span> <span class="n">GRID_SIZE</span> <span class="o">+</span>
-                        <span class="n">currentCell</span><span class="p">.</span><span class="n">y</span> <span class="o">*</span> <span class="n">GRID_SIZE</span> <span class="o">+</span> <span class="n">currentCell</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
-        <span class="k">if</span> <span class="p">(</span><span class="n">grid</span><span class="p">[</span><span class="n">indexGrid</span><span class="p">].</span><span class="n">color</span><span class="p">.</span><span class="n">w</span> <span class="o">==</span> <span class="mf">1.0</span><span class="n">f</span><span class="p">)</span> <span class="p">{</span>
-            <span class="o">*</span><span class="n">normalOut</span> <span class="o">=</span> <span class="n">normal</span><span class="p">;</span>
-            <span class="k">return</span> <span class="n">indexGrid</span><span class="p">;</span> <span class="c1">// Hit a non-empty voxel</span>
-        <span class="p">}</span>
-<span class="p">}</span>
-
+<p>We can define a ray like this:</p>
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">typedef</span> <span class="k">struct</span> <span class="p">{</span>
+  <span class="n">float3</span> <span class="n">origin</span><span class="p">;</span>
+  <span class="n">float3</span> <span class="n">direction</span><span class="p">;</span>
+<span class="p">}</span> <span class="n">Ray</span><span class="p">;</span>
 </code></pre></div></div>
-<p>Now that we can traverse the grid, we can easily determine if a point is inside a voxel or not, giving me the ability to color that pixel whatever color I want.</p>
-<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span> <span class="n">hitIndex</span> <span class="o">=</span> <span class="n">march_ray</span><span class="p">(</span><span class="n">ray</span><span class="p">,</span> <span class="n">grid</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">normal</span><span class="p">);</span>
+
+<p>And we setup our rays to shoot from the camera like this:</p>
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">float</span> <span class="n">aspectRatio</span> <span class="o">=</span> <span class="p">(</span><span class="kt">float</span><span class="p">)</span><span class="n">width</span> <span class="o">/</span> <span class="p">(</span><span class="kt">float</span><span class="p">)</span><span class="n">height</span><span class="p">;</span> <span class="c1">// screen sizes</span>
+
+<span class="c1">//normalizing pixel coordinates</span>
+<span class="kt">float</span> <span class="n">normalizedX</span> <span class="o">=</span> <span class="p">(</span><span class="mf">2.0</span><span class="n">f</span> <span class="o">*</span> <span class="n">x</span> <span class="o">/</span> <span class="n">width</span><span class="p">)</span> <span class="o">-</span> <span class="mf">1.0</span><span class="n">f</span><span class="p">;</span>
+<span class="n">normalizedX</span> <span class="o">*=</span> <span class="n">aspectRatio</span><span class="p">;</span>
+<span class="kt">float</span> <span class="n">normalizedY</span> <span class="o">=</span> <span class="p">(</span><span class="mf">2.0</span><span class="n">f</span> <span class="o">*</span> <span class="n">y</span> <span class="o">/</span> <span class="n">height</span><span class="p">)</span> <span class="o">-</span> <span class="mf">1.0</span><span class="n">f</span><span class="p">;</span>
+
+<span class="c1">//Calculate ray direction</span>
+<span class="n">Ray</span> <span class="n">ray</span> <span class="p">;</span>
+<span class="n">ray</span><span class="p">.</span><span class="n">origin</span> <span class="o">=</span> <span class="n">camera</span><span class="p">.</span><span class="n">position</span><span class="p">;</span>
+<span class="n">ray</span><span class="p">.</span><span class="n">direction</span> <span class="o">=</span> <span class="p">(</span><span class="n">float3</span><span class="p">)(</span><span class="n">normalizedX</span><span class="p">,</span> <span class="n">normalizedY</span><span class="p">,</span> <span class="mf">1.0</span><span class="n">f</span><span class="p">);</span>
+
+<span class="c1">//We can also use camera rotation if we combine the view matrix</span>
+<span class="c1">//      of the camera with the direction we just made</span>
+</code></pre></div></div>
+
+<h2 id="fast-voxel-traversal-algorithm">Fast Voxel Traversal Algorithm</h2>
+<p>We are going to use the Fast Voxel Traversal Algorithm for our ray marching technique. Being fast and reliable, this algorithm is specifically designed for traversing grids and it will represent the sweet spot of our project. You may find people refering to it as DDA (Digital Differential Analyzer) algorithm.</p>
+
+<h4 id="how-does-the-basic-principle-of-dda-works">How does the basic principle of DDA works?</h4>
+
+<p>We evaluate how much the ray travels on each axis inside the voxel and we determine which voxel comes next based on the shortest axis traversed and the direction of it. This is important so we don’t skip by mistake cells. We march using this method while checking at each step if the current voxel is empty or not. (voxel.color.w as we decided earlier).
+<a href="https://www.youtube.com/watch?v=NbSee-XM7WA&amp;t=412s">Check this tutorial for DDA with a great visual example</a></p>
+
+<p>You can find a more in depth explanation on this <a href="https://github.com/cgyurgyik/fast-voxel-traversal-algorithm/blob/master/overview/FastVoxelTraversalOverview.md">here</a>. This is a brief outline of the algorithm:</p>
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">//initialization for the first step</span>
+<span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">;</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span> 
+<span class="p">{</span>
+    <span class="c1">//determine how much we should move in each direction</span>
+    <span class="n">step</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">ray</span><span class="p">.</span><span class="n">direction</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="o">-</span><span class="n">FLT_MIN</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="n">ray</span><span class="p">.</span><span class="n">direction</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;</span> <span class="o">-</span><span class="n">FLT_MIN</span><span class="p">);</span>
+    <span class="kt">float</span> <span class="n">nextBoundary</span> <span class="o">=</span> <span class="p">(</span><span class="kt">float</span><span class="p">)(</span><span class="n">floor</span><span class="p">(</span><span class="n">ray</span><span class="p">.</span><span class="n">origin</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">+</span> <span class="p">(</span><span class="n">step</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">);</span>
+    <span class="n">tMax</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">nextBoundary</span> <span class="o">-</span> <span class="n">ray</span><span class="p">.</span><span class="n">origin</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">/</span> <span class="n">ray</span><span class="p">.</span><span class="n">direction</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+    <span class="n">tDelta</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span><span class="n">f</span> <span class="o">/</span> <span class="n">fabs</span><span class="p">(</span><span class="n">ray</span><span class="p">.</span><span class="n">direction</span><span class="p">[</span><span class="n">i</span><span class="p">]);</span>
+<span class="p">}</span>
+
+<span class="k">while</span> <span class="p">(</span><span class="nb">true</span><span class="p">)</span> 
+<span class="p">{</span>
+    <span class="c1">//........</span>
+
+    <span class="c1">//what's next?</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">tMax</span><span class="p">.</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">tMax</span><span class="p">.</span><span class="n">y</span> <span class="o">&amp;&amp;</span> <span class="n">tMax</span><span class="p">.</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">tMax</span><span class="p">.</span><span class="n">z</span><span class="p">)</span> 
+    <span class="p">{</span>
+        <span class="n">currentCell</span><span class="p">.</span><span class="n">x</span> <span class="o">+=</span> <span class="n">step</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+        <span class="n">tMax</span><span class="p">.</span><span class="n">x</span> <span class="o">+=</span> <span class="n">tDelta</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+        <span class="c1">//maybe pick a normal too?</span>
+        <span class="c1">//normal = (float3)(-step.x, 0.0f, 0.0f);</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">tMax</span><span class="p">.</span><span class="n">y</span> <span class="o">&lt;</span> <span class="n">tMax</span><span class="p">.</span><span class="n">z</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">currentCell</span><span class="p">.</span><span class="n">y</span> <span class="o">+=</span> <span class="n">step</span><span class="p">.</span><span class="n">y</span><span class="p">;</span>
+        <span class="n">tMax</span><span class="p">.</span><span class="n">y</span> <span class="o">+=</span> <span class="n">tDelta</span><span class="p">.</span><span class="n">y</span><span class="p">;</span>
+    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+        <span class="n">currentCell</span><span class="p">.</span><span class="n">z</span> <span class="o">+=</span> <span class="n">step</span><span class="p">.</span><span class="n">z</span><span class="p">;</span>
+        <span class="n">tMax</span><span class="p">.</span><span class="n">z</span> <span class="o">+=</span> <span class="n">tDelta</span><span class="p">.</span><span class="n">z</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="c1">//What if we hit something?</span>
+    <span class="c1">//Check if the grid holds something in there or not</span>
+    <span class="c1">//If there is a solid voxel we can say that we hit something</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">currentCell</span><span class="p">.</span><span class="n">x</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">currentCell</span><span class="p">.</span><span class="n">x</span> <span class="o">&lt;</span> <span class="n">GRID_SIZE</span> <span class="o">&amp;&amp;</span>
+            <span class="n">currentCell</span><span class="p">.</span><span class="n">y</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">currentCell</span><span class="p">.</span><span class="n">y</span> <span class="o">&lt;</span> <span class="n">GRID_SIZE</span> <span class="o">&amp;&amp;</span>
+            <span class="n">currentCell</span><span class="p">.</span><span class="n">z</span> <span class="o">&gt;=</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="n">currentCell</span><span class="p">.</span><span class="n">z</span> <span class="o">&lt;</span> <span class="n">GRID_SIZE</span><span class="p">)</span> <span class="p">{</span>
+            
+            <span class="kt">int</span> <span class="n">indexGrid</span> <span class="o">=</span> <span class="n">currentCell</span><span class="p">.</span><span class="n">z</span> <span class="o">*</span> <span class="n">GRID_SIZE</span> <span class="o">*</span> <span class="n">GRID_SIZE</span> <span class="o">+</span>
+                            <span class="n">currentCell</span><span class="p">.</span><span class="n">y</span> <span class="o">*</span> <span class="n">GRID_SIZE</span> <span class="o">+</span> <span class="n">currentCell</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">grid</span><span class="p">[</span><span class="n">indexGrid</span><span class="p">].</span><span class="n">color</span><span class="p">.</span><span class="n">w</span> <span class="o">==</span> <span class="mf">1.0</span><span class="n">f</span><span class="p">)</span> <span class="p">{</span>
+                <span class="c1">// Hit a non-empty voxel, we return the index</span>
+                <span class="k">return</span> <span class="n">indexGrid</span><span class="p">;</span> 
+            <span class="p">}</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<p>Now that we can traverse the grid, we can easily determine if a point is inside a voxel or not, giving us the ability to color that pixel based on our world of voxels</p>
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span> <span class="n">hitIndex</span> <span class="o">=</span> <span class="n">march_ray</span><span class="p">(</span><span class="n">ray</span><span class="p">,</span> <span class="n">grid</span><span class="p">);</span>
 <span class="k">if</span> <span class="p">(</span><span class="n">hitIndex</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
     
     <span class="c1">//this is voxel, let's make it white!</span>
@@ -135,12 +180,167 @@ We evaluate how much the ray travles on each axis inside the voxel and we determ
     <span class="n">pixelBuffer</span><span class="p">[</span><span class="n">index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mf">255.0</span><span class="n">f</span><span class="p">;</span> <span class="c1">// Green</span>
     <span class="n">pixelBuffer</span><span class="p">[</span><span class="n">index</span> <span class="o">+</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mf">255.0</span><span class="n">f</span><span class="p">;</span> <span class="c1">// Blue</span>
 
-<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="c1">//or lets's the voxel color</span>
+    <span class="n">pixelBuffer</span><span class="p">[</span><span class="n">index</span> <span class="o">+</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">grid</span><span class="p">[</span><span class="n">hitIndex</span><span class="p">].</span><span class="n">color</span><span class="p">.</span><span class="n">x</span><span class="p">;</span> <span class="c1">// Red</span>
+    <span class="n">pixelBuffer</span><span class="p">[</span><span class="n">index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">grid</span><span class="p">[</span><span class="n">hitIndex</span><span class="p">].</span><span class="n">color</span><span class="p">.</span><span class="n">y</span><span class="p">;</span> <span class="c1">// Green</span>
+    <span class="n">pixelBuffer</span><span class="p">[</span><span class="n">index</span> <span class="o">+</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">grid</span><span class="p">[</span><span class="n">hitIndex</span><span class="p">].</span><span class="n">color</span><span class="p">.</span><span class="n">z</span><span class="p">;</span> <span class="c1">// Blue</span>
+
+<span class="p">}</span> <span class="k">else</span> <span class="p">{</span> <span class="c1">//background</span>
     <span class="n">pixelBuffer</span><span class="p">[</span><span class="n">index</span> <span class="o">+</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span><span class="n">f</span><span class="p">;</span> <span class="c1">// Red</span>
     <span class="n">pixelBuffer</span><span class="p">[</span><span class="n">index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span><span class="n">f</span><span class="p">;</span> <span class="c1">// Green</span>
     <span class="n">pixelBuffer</span><span class="p">[</span><span class="n">index</span> <span class="o">+</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span><span class="n">f</span><span class="p">;</span> <span class="c1">// Blue</span>
 <span class="p">}</span>
 </code></pre></div></div>
+
+<h1 id="make-them-look-good">Make them look good</h1>
+<p>If you followed everything so far you could have something like this.</p>
+
+<p><img src="assets/images/1.png" /></p>
+
+<p>This is already quite impressive but I know we are all here for the cool per voxel effects so let’s dive in this topic now.</p>
+
+<h1 id="per-voxel-instead-of-per-pixel">Per Voxel instead of Per pixel</h1>
+<p>The main difference between the two aprroaches is performance and looks in the end. 
+For doing lighting per pixel we would follow the regular ray tracing principles and use the kernel/shader we already made in the previous step, since this is already capable of computing code for each pixel on the screen. 
+However, we want the nice stylized and blocky effect instead. We can achieve this by having a separate kernel or shader depending on what API you are using that will run some code for each voxel in the scene instead of each pixel on the screen. This is basically a better version of a for loop that will run on our GPUs.</p>
+
+<p>Here is an example on how to acces the voxels with this approach. This is in OpenCL kernel but it will be similar in others envirnoments.</p>
+
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">int</span> <span class="n">x</span> <span class="o">=</span> <span class="n">get_global_id</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+<span class="kt">int</span> <span class="n">y</span> <span class="o">=</span> <span class="n">get_global_id</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="kt">int</span> <span class="n">z</span> <span class="o">=</span> <span class="n">get_global_id</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+
+<span class="kt">int</span> <span class="n">index</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">*</span> <span class="n">GRID_SIZE</span> <span class="o">+</span> <span class="n">z</span> <span class="o">*</span> <span class="n">GRID_SIZE</span> <span class="o">*</span> <span class="n">GRID_SIZE</span><span class="p">;</span>
+
+<span class="c1">//voxel</span>
+<span class="n">grid</span><span class="p">[</span><span class="n">index</span><span class="p">]</span><span class="c1">//read or modify its values</span>
+</code></pre></div></div>
+
+<p>Just to put into perspective, let’s say we need to calculate some lighting in our scene. For the sake of this example let’s assume that the calculation for this lighting is exactly the same in a per pixel method as well as on a per voxel method. Now let’s think about how many of those calculation we would do in each scenario.</p>
+
+<p>Usually the most common resolution for a monitor is Full HD (1920x1080), this results in 2.073.600 pixels, thus that many calculations. Our scene, as we established in the begining, is 64x64x64 voxels, which means we only do 262.144 calculations (worst case scenario where the entire grid is filled)
+And we get the stylized effect that we all love on top of all that performance.</p>
+
+<h1 id="lighting">Lighting</h1>
+<p>We need a way to store the lights and we can simply declare a struct like this.</p>
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">typedef</span> <span class="k">struct</span>
+<span class="p">{</span>
+    <span class="n">float4</span> <span class="n">color</span><span class="p">;</span>
+	<span class="n">float4</span> <span class="n">pos</span><span class="p">;</span>
+<span class="p">}</span><span class="n">Light</span><span class="p">;</span>
+</code></pre></div></div>
+<p>Same memory talk as the voxels and I am going to use the 4th member of color to store the light intensity.
+We can evaluate the light level based on the distance between the voxel and the light source. Add some attenuation and intensity and we have some light evaluated that we can store in that extra float4.</p>
+
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">float3</span> <span class="n">lightCell</span> <span class="o">=</span> <span class="n">floor</span><span class="p">(</span><span class="n">lights</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">pos</span><span class="p">.</span><span class="n">xyz</span><span class="p">);</span>
+
+<span class="n">float3</span> <span class="n">voxelPos</span> <span class="o">=</span> <span class="p">(</span><span class="n">float3</span><span class="p">)(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span><span class="p">);</span>
+<span class="kt">float</span> <span class="n">dst</span> <span class="o">=</span> <span class="n">distance</span><span class="p">(</span><span class="n">voxelPos</span><span class="p">,</span> <span class="n">lightCell</span><span class="p">);</span>
+
+<span class="kt">float</span> <span class="n">intensity</span> <span class="o">=</span> <span class="n">lights</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">color</span><span class="p">.</span><span class="n">w</span><span class="p">;</span> <span class="c1">// Increase for more powerful light</span>
+<span class="kt">float</span> <span class="n">attenuationFactor</span> <span class="o">=</span> <span class="mf">0.008</span><span class="n">f</span><span class="p">;</span> <span class="c1">// Decrease for less attenuation</span>
+<span class="kt">float</span> <span class="n">attenuation</span> <span class="o">=</span> <span class="mf">1.0</span><span class="n">f</span> <span class="o">/</span> <span class="p">(</span><span class="mf">1.0</span><span class="n">f</span> <span class="o">+</span> <span class="n">attenuationFactor</span> <span class="o">*</span> <span class="n">dst</span> <span class="o">*</span> <span class="n">dst</span><span class="p">);</span>
+<span class="n">float3</span> <span class="n">lightCol</span> <span class="o">=</span> <span class="n">lights</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">color</span><span class="p">.</span><span class="n">xyz</span><span class="p">;</span> <span class="c1">// Color of the light</span>
+
+<span class="n">grid</span><span class="p">[</span><span class="n">index</span><span class="p">].</span><span class="n">extra</span><span class="p">.</span><span class="n">xyz</span> <span class="o">=</span>  <span class="n">lightCol</span> <span class="o">*</span> <span class="n">attenuation</span> <span class="o">*</span> <span class="n">intensity</span> 
+<span class="c1">// this is the light calculation, maybe store in the extra now</span>
+
+</code></pre></div></div>
+<p>We can now change the pixel kernel to take this into consideration.</p>
+
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">finalColor</span> <span class="o">=</span> <span class="n">grid</span><span class="p">[</span><span class="n">hitIndex</span><span class="p">].</span><span class="n">color</span><span class="p">.</span><span class="n">xyz</span> <span class="o">*</span> <span class="n">grid</span><span class="p">[</span><span class="n">hitIndex</span><span class="p">].</span><span class="n">extra</span><span class="p">.</span><span class="n">xyz</span><span class="p">;</span>
+<span class="n">pixelBuffer</span><span class="p">[</span><span class="n">index</span> <span class="o">+</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">finalColor</span><span class="p">.</span><span class="n">x</span><span class="p">;</span> <span class="c1">// Red</span>
+<span class="n">pixelBuffer</span><span class="p">[</span><span class="n">index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">finalColor</span><span class="p">.</span><span class="n">y</span><span class="p">;</span> <span class="c1">// Green</span>
+<span class="n">pixelBuffer</span><span class="p">[</span><span class="n">index</span> <span class="o">+</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">finalColor</span><span class="p">.</span><span class="n">z</span><span class="p">;</span> <span class="c1">// Blue</span>
+</code></pre></div></div>
+
+<p>We can now admire lighting per each voxel
+<img src="assets/images/2.png" /></p>
+
+<h1 id="shadows">Shadows</h1>
+<p>To complete our light system we should have some shadows in the scene to give our world more credibility. This is not hard at all, actually, we already have everything we need to implement shadows. In order to do this we need to see if there is anything between the light and the voxel. Let’s use our ray marching algorithm from above to traverse the grid from the voxel to the light and see what we hit.</p>
+
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code> <span class="c1">// Shadows</span>
+<span class="n">Ray</span> <span class="n">shadowRay</span><span class="p">;</span>
+<span class="n">shadowRay</span><span class="p">.</span><span class="n">direction</span> <span class="o">=</span> <span class="n">normalize</span><span class="p">(</span><span class="n">lightCell</span> <span class="o">-</span> <span class="n">voxelPos</span><span class="p">);</span>
+<span class="n">shadowRay</span><span class="p">.</span><span class="n">origin</span> <span class="o">=</span> <span class="p">(</span><span class="n">voxelPos</span><span class="o">+</span><span class="mf">0.5</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="n">shadowRay</span><span class="p">.</span><span class="n">direction</span> <span class="o">*</span> <span class="p">(</span><span class="mf">2.5</span><span class="n">f</span> <span class="p">);</span>
+<span class="kt">int</span> <span class="n">hit</span> <span class="o">=</span> <span class="n">march_ray</span><span class="p">(</span><span class="n">shadowRay</span><span class="p">,</span> <span class="n">grid</span><span class="p">);</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="n">hit</span> <span class="o">==</span> <span class="o">-</span><span class="mi">10</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// The ray hit the light source directly, no shadow</span>
+    <span class="n">shadowMultiplier</span> <span class="o">=</span> <span class="mf">1.0</span><span class="n">f</span><span class="p">;</span>
+<span class="p">}</span> <span class="k">else</span> <span class="nf">if</span> <span class="p">(</span><span class="n">hit</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+    <span class="c1">// We hit something so here is shadow</span>
+    <span class="n">shadowMultiplier</span> <span class="o">=</span> <span class="mf">0.005</span><span class="n">f</span><span class="p">;</span>  
+    <span class="c1">//not 0 so it's not pitch black</span>
+<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="c1">// No hit, full illumination</span>
+    <span class="n">shadowMultiplier</span> <span class="o">=</span> <span class="mf">1.0</span><span class="n">f</span><span class="p">;</span>
+<span class="p">}</span>
+
+</code></pre></div></div>
+
+<p>We can multiply this shadow result to our light calculation we had before for the final result</p>
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">grid</span><span class="p">[</span><span class="n">index</span><span class="p">].</span><span class="n">extra</span><span class="p">.</span><span class="n">xyz</span> <span class="o">=</span> <span class="n">lightCol</span> <span class="o">*</span> <span class="n">attenuation</span> <span class="o">*</span> <span class="n">intensity</span> <span class="o">*</span> <span class="n">shadowMultiplier</span><span class="p">;</span>
+</code></pre></div></div>
+<p><img src="assets/images/3.png" /></p>
+
+<h1 id="improvements">Improvements?</h1>
+
+<p>The list of improvements could go on forever but for the sake of this article I will keep it short and  quickly describe how to implement only some of the easy ones out there.</p>
+
+<h2 id="soft-shadows-at-a-per-voxel-level">Soft Shadows at a per voxel level?</h2>
+<p><img src="assets/images/hard_soft_zoom.png" />
+If we calculate our shadows with a single fixed cell position for our light source we only get hard shadows. To quickly solve this issue we could pick each time a random adjasent voxel around the light source itself(imagine a 3x3x3 area where we pick a cell). This way we get the effect of penumbra since our light is no longer a single point. However, we now notice our voxels flickering and thats because of the random position picked each frame, thus random results each frame; we call this noise.</p>
+
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">float3</span> <span class="n">lightCell</span> <span class="o">=</span> <span class="n">floor</span><span class="p">(</span><span class="n">lights</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="n">pos</span><span class="p">.</span><span class="n">xyz</span><span class="p">);</span>
+<span class="n">lightCell</span> <span class="o">=</span> <span class="n">getRandomAdjacentVoxel</span><span class="p">(</span><span class="n">lightCell</span><span class="p">,</span>  <span class="n">seed</span><span class="o">++</span><span class="p">);</span> 
+</code></pre></div></div>
+
+<p>We could also shoot 27 rays (3x3x3) each time for a light and eliminate the noise problem but this would impact performance.</p>
+
+<h2 id="denoising-per-voxel">Denoising per voxel?</h2>
+
+<p>Like regular ray tracing, noise it’s an annoying issue; fortunelty there are solutions quite easy to implement. Here are two ideas that you could try,separately or even combine them.</p>
+
+<ul>
+  <li>Instead of using the current frame result for our light calulcations, we can do a weighted average between the current frame result and the last frame, where the last one is more important. This will also give us some latency in our image but we can find a good balance for that weighted average and find a good balance between looks and latency.</li>
+</ul>
+
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">////....light calculations....</span>
+<span class="n">c</span> <span class="o">=</span> <span class="n">lightCol</span> <span class="o">*</span> <span class="n">attenuation</span> <span class="o">*</span> <span class="n">intensity</span> <span class="o">*</span> <span class="n">shadowMultiplier</span><span class="p">;</span>
+
+<span class="n">oldColor</span> <span class="o">=</span> <span class="n">grid</span><span class="p">[</span><span class="n">index</span><span class="p">].</span><span class="n">extra</span><span class="p">.</span><span class="n">xyz</span><span class="p">;</span> <span class="c1">// previous frame result</span>
+
+<span class="c1">// weighted averegate 10% new frame | 90% old frame</span>
+<span class="n">float3</span> <span class="n">result</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.1</span><span class="n">f</span> <span class="o">*</span> <span class="n">c</span> <span class="o">+</span> <span class="mf">0.9</span><span class="n">f</span> <span class="o">*</span> <span class="n">oldColor</span><span class="p">);</span> 
+<span class="n">grid</span><span class="p">[</span><span class="n">index</span><span class="p">].</span><span class="n">extra</span><span class="p">.</span><span class="n">xyz</span> <span class="o">=</span> <span class="n">result</span><span class="p">;</span> <span class="c1">// final output</span>
+</code></pre></div></div>
+
+<ul>
+  <li>We can also have a structure that will acumulate all of the light calculation for each voxel (this can be another grid). Each frame we will add the result to the acumulator grid. The image we display is formed by the acumulation color divided by how many frames we have acumulated. Keep in mind that we need to reset the frame counter when we move something in the world otherwise it will take a long time to see the change on the screen.</li>
+</ul>
+
+<div class="language-cpp highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">////....light calculations....</span>
+<span class="n">c</span> <span class="o">=</span> <span class="n">lightCol</span> <span class="o">*</span> <span class="n">attenuation</span> <span class="o">*</span> <span class="n">intensity</span> <span class="o">*</span> <span class="n">shadowMultiplier</span><span class="p">;</span>
+
+<span class="n">acumulatorGrid</span><span class="p">[</span><span class="n">index</span><span class="p">].</span><span class="n">extra</span><span class="p">.</span><span class="n">xyz</span> <span class="o">+=</span> <span class="n">c</span><span class="p">;</span> <span class="c1">// add result to acumulator</span>
+<span class="n">grid</span><span class="p">[</span><span class="n">index</span><span class="p">].</span><span class="n">extra</span><span class="p">.</span><span class="n">xyz</span> <span class="o">=</span> <span class="n">acumulatorGrid</span><span class="p">[</span><span class="n">index</span><span class="p">].</span><span class="n">extra</span><span class="p">.</span><span class="n">xyz</span> <span class="o">/</span> <span class="p">(</span><span class="kt">float</span><span class="p">)</span><span class="n">frameIndex</span><span class="p">;</span> <span class="c1">// final output</span>
+</code></pre></div></div>
+
+<h1 id="closing-remarks">Closing remarks</h1>
+
+<p><img src="assets/images/fin.png" />
+This article showcased the amazing posibilities with voxels and really simple algorithms and ideas. We laid the foundation for a possible interesting future project and from now on, the sky is the limit, reflections, global ilumiantions, you name it!</p>
+
+<p>If you followed this article or at least found it interesting, I strongly encourage you to take a look at the following:</p>
+<ul>
+  <li>https://jacco.ompf2.com/2021/02/01/a-voxel-renderer-for-learning-c-c/</li>
+  <li>Octress and voxel engines</li>
+  <li>Ray tracing</li>
+  <li>Teardown devtalk</li>
+</ul>
+
 
         </section>
 
