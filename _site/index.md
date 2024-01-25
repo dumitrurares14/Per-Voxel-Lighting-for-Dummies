@@ -301,4 +301,4 @@ If you followed this article or at least found it interesting, I strongly encour
 
 
 
-
+<img src="assets/images/Logo BUas_Black.png">
